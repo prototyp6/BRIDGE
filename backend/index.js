@@ -3,8 +3,11 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const { createCanvas, loadImage, registerFont } = require("canvas");
-
+const verbwire = require('verbwire')('sk_live_f8fbfd33-38b8-422f-b951-7754970618cd');
 const app = express();
+const FormData = require('form-data');
+const axios = require('axios');
+const API_KEY = 'sk_live_f8fbfd33-38b8-422f-b951-7754970618cd'
 
 app.use(express.json());
 app.use(cors());
@@ -17,7 +20,7 @@ app.post("/data", (req, res) => {
 
     const template = "c3"
 
-    createDoc(template, description, name, hostOne, hostTwo,  roleOne, roleTwo)
+    createDoc(template, description, name, hostOne, hostTwo,  roleOne, roleTwo, address)
 
     // const filePath = `./procecssed/${name}.png`;
     // const img = fs.readFileSync(filePath);
@@ -27,6 +30,77 @@ app.post("/data", (req, res) => {
     res.send('Data received');
    });
 
+  
+async function verbwireNFT(name, address, heading){
+try {
+  console.log("Minting NFT in address: ", address);
+
+  const form = new FormData();
+  form.append("allowPlatformToOperateToken", true);
+  form.append("chain", "goerli");
+  form.append("recipientAddress", address);
+  form.append("filePath", fs.createReadStream(`./processed/${name}.png`));
+  form.append("name", name);
+  form.append("description", heading);
+
+  const headers = {
+    "X-API-Key": API_KEY,
+    ...form.getHeaders(),
+  };
+
+  console.log(headers)
+
+  const formDataBuffer = await new Promise((resolve, reject) => {
+    const formChunks = [];
+
+    form.on("data", (chunk) => formChunks.push(chunk));
+    form.on("error", (error) => reject(error));
+    form.on("end", () => {
+      const formBuffer = Buffer.concat(formChunks);
+      resolve(formBuffer);
+    });
+  });
+
+  const config = {
+    method: "post",
+    url: "https://api.verbwire.com/v1/nft/mint/quickMintFromFile",
+    headers,
+    data: form
+  };
+
+  console.log("data", form);
+
+  const response = await axios(config);
+
+  console.log(JSON.stringify(response.data));
+  res.send(JSON.stringify(response.data));
+} catch (err) {
+  console.log(err, "error in VM");
+}
+}
+
+
+async function mintNFT(name, address, heading) {
+  try {
+ const sdk = require('api')('@verbwire/v1.0#ius845flgxwog8q');
+
+sdk.auth('sk_live_f8fbfd33-38b8-422f-b951-7754970618cd');
+sdk.postNftMintQuickmintfromfile({
+  allowPlatformToOperateToken: 'true',
+  chain: 'goerli',
+  name: name,
+  description: heading,
+  filePath: `./processed/${name}.png`,
+  recipientAddress: address,
+}, {accept: 'application/json'})
+  .then(({ data }) => console.log(data))
+  .catch(err => console.error(err));
+  } catch (err) {
+    console.log('Error minting NFT:', err);
+  }
+}
+
+
 function createDoc(
   template,
   heading,
@@ -34,7 +108,8 @@ function createDoc(
   hostOne,
   hostTwo,
   roleOne,
-  roleTwo
+  roleTwo,
+  address
 ) {
   // Loading the certificate template
   const canvas = createCanvas(1414, 2000);
@@ -160,6 +235,13 @@ function createDoc(
     const out = fs.createWriteStream(`./processed/${imageName}`);
     const stream = canvas.createPNGStream();
     stream.pipe(out);
+
+    try {
+    mintNFT(name, address, heading);
+    }catch(err) {
+      console.log(err, "error in VM")
+    }
+
   });
 }
 
